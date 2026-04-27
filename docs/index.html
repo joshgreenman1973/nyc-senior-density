@@ -1,0 +1,1608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where the elders are — NYC-area senior population, 2000 to 2023</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1915;
+    --ink-soft: #3c3a33;
+    --muted: #706c5f;
+    --rule: #d9d3c2;
+    --bg: #f4f0e6;
+    --paper: #fbf8f0;
+    --accent: #a4281a;
+    --loss: #2d6a9f;
+    --gain: #a4281a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .serif { font-family: "Fraunces", Georgia, serif; font-feature-settings: "ss01"; }
+
+  /* Masthead */
+  .mast {
+    border-bottom: 1px solid var(--rule);
+    padding: 48px 24px 32px;
+  }
+  .mast-inner {
+    max-width: 1180px; margin: 0 auto;
+  }
+  .kicker {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 14px;
+  }
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: clamp(32px, 4.4vw, 58px);
+    line-height: 1.05; letter-spacing: -0.02em; font-weight: 500;
+    margin: 0 0 16px; max-width: 22ch;
+  }
+  h1 .nobr { white-space: nowrap; }
+  h1 em { font-style: italic; font-weight: 400; color: var(--accent); }
+  .dek {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: clamp(16px, 1.6vw, 20px); line-height: 1.45;
+    color: var(--ink-soft); max-width: 62ch; margin: 0;
+    font-weight: 400;
+  }
+
+  /* Main grid */
+  main {
+    max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px;
+    display: grid; gap: 24px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  @media (min-width: 960px) {
+    main { grid-template-columns: minmax(0, 1fr) 300px; }
+  }
+
+  /* Comparison bar */
+  .bar {
+    grid-column: 1 / -1;
+    background: var(--paper); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 16px 18px;
+  }
+  .bar-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; row-gap: 10px; }
+  .bar-row + .bar-row { margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--rule); }
+  /* #u18-controls and #band-controls each contain more .bar-row children.
+     The adjacent-sibling rule above doesn't cross that container boundary,
+     so we mirror its spacing/separator explicitly here. */
+  .bar > #u18-controls,
+  .bar > #band-controls { margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--rule); }
+  .bar > #u18-controls > .bar-row:first-child,
+  .bar > #band-controls > .bar-row:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  .bar-label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-right: 4px; min-width: 82px;
+  }
+  .bar-sep {
+    width: 1px; align-self: stretch; background: var(--rule); margin: 2px 4px;
+  }
+  .chip {
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    padding: 6px 13px; border-radius: 999px; border: 1px solid var(--rule);
+    background: #fff; color: var(--ink-soft); cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+  }
+  .chip + .chip { margin-left: 0; }
+  .chip:hover { background: #f0ebdd; }
+  .chip.on {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+  .chip.year-chip.on { background: var(--accent); border-color: var(--accent); }
+  .chip.ghost:not(.on) {
+    background: transparent; border-style: dashed; color: var(--muted);
+  }
+  .chip.ghost:not(.on):hover { background: #f0ebdd; color: var(--ink-soft); border-style: solid; }
+
+  /* Info icon (small "?" badge that opens a tooltip on hover) */
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid var(--rule);
+    background: #fff; color: var(--muted);
+    font-family: "Fraunces", serif; font-size: 12px; font-weight: 600;
+    cursor: help; user-select: none;
+    margin-left: 2px;
+    transition: all 0.12s ease;
+  }
+  .info-icon:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* Floating tooltip (rendered into a portal div by JS) */
+  .pop-tip {
+    position: absolute; z-index: 1000;
+    max-width: 320px; padding: 10px 13px;
+    background: var(--paper); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 5px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 12px; line-height: 1.5; color: var(--ink-soft);
+    pointer-events: none;
+    opacity: 0; transform: translateY(-2px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+  }
+  .pop-tip.show { opacity: 1; transform: translateY(0); }
+  .pop-tip b { color: var(--ink); font-weight: 600; }
+  .pop-tip i { color: var(--ink); font-style: italic; }
+
+  /* Segmented mode toggle: visually fused pair so it reads as one control */
+  .mode-toggle {
+    display: inline-flex; border: 1px solid var(--ink); border-radius: 999px;
+    padding: 2px; background: #fff;
+  }
+  .mode-toggle .chip.mode-chip {
+    border: none; padding: 5px 14px; border-radius: 999px;
+    background: transparent; color: var(--ink-soft);
+  }
+  .mode-toggle .chip.mode-chip.on {
+    background: var(--ink); color: var(--paper);
+  }
+  .mode-toggle .chip.mode-chip:not(.on):hover {
+    background: #f0ebdd; color: var(--ink);
+  }
+
+  /* Map card */
+  .map-card {
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .map-hed {
+    padding: 14px 18px 10px; border-bottom: 1px solid var(--rule);
+  }
+  .map-title {
+    font-family: "Fraunces", serif; font-size: 22px; line-height: 1.15;
+    font-weight: 500; letter-spacing: -0.01em; margin: 0;
+  }
+  .map-title .from { color: var(--muted); font-weight: 400; font-style: italic; }
+  .map-title .arrow { color: var(--muted); margin: 0 6px; }
+  .map-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  #map { height: 640px; }
+  .legend-bar {
+    padding: 10px 18px; border-top: 1px solid var(--rule);
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    font-size: 11px; color: var(--muted);
+  }
+  .leg { display: flex; gap: 3px; align-items: center; }
+  .leg .sw {
+    width: 20px; height: 10px; display: inline-block; border-radius: 1px;
+  }
+
+  /* Side rail */
+  .rail { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 16px 18px;
+  }
+  .card-hed {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 10px;
+  }
+  .big-num {
+    font-family: "Fraunces", serif; font-size: 34px; line-height: 1; font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .big-num .delta { font-size: 15px; vertical-align: 4px; margin-left: 6px; }
+  .delta-pos { color: var(--gain); }
+  .delta-neg { color: var(--loss); }
+  .sub-num { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .row-list {
+    list-style: none; margin: 0; padding: 0; font-size: 12px;
+  }
+  .row-list li {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 5px 0; border-bottom: 1px solid var(--rule);
+  }
+  .row-list li:last-child { border-bottom: none; }
+  .row-list .geo { color: var(--ink-soft); font-weight: 500; }
+  .row-list .val { font-family: "Fraunces", serif; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+
+  /* Story markers on the map */
+  .story-marker {
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; pointer-events: auto;
+  }
+  .story-marker .story-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1.5px var(--ink), 0 1px 4px rgba(0,0,0,0.35);
+    transition: transform 0.12s ease;
+  }
+  .story-marker.gain .story-dot { background: var(--gain); }
+  .story-marker.loss .story-dot { background: var(--loss); }
+  .story-marker:hover .story-dot { transform: scale(1.35); }
+  .leaflet-popup.story-popup .leaflet-popup-content-wrapper {
+    background: var(--paper); border: 1px solid var(--rule);
+    border-radius: 5px; box-shadow: 0 6px 28px rgba(0,0,0,0.18);
+  }
+  .leaflet-popup.story-popup .leaflet-popup-content { margin: 0; }
+  .story-pop { padding: 14px 16px 12px; max-width: 300px; }
+  .story-tag {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 700; margin-bottom: 6px;
+  }
+  .story-title {
+    font-family: "Fraunces", serif; font-size: 17px; line-height: 1.2;
+    font-weight: 500; letter-spacing: -0.01em; color: var(--ink);
+  }
+  .story-place { font-size: 11px; color: var(--muted); margin-top: 2px; margin-bottom: 10px; }
+  .story-body {
+    font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+  .story-nums {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding-top: 8px; border-top: 1px solid var(--rule);
+    font-size: 11px; color: var(--muted);
+  }
+  .story-nums b { font-family: "Fraunces", serif; color: var(--ink); font-weight: 500; }
+
+  /* Enrollment embed */
+  .enroll {
+    grid-column: 1 / -1;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 22px 24px 20px; margin-top: 6px;
+  }
+  .enroll-hed { margin-bottom: 18px; max-width: 72ch; }
+  .kicker-small {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 8px;
+  }
+  .enroll-title {
+    font-family: "Fraunces", serif; font-size: 24px; line-height: 1.2;
+    font-weight: 500; letter-spacing: -0.01em; margin: 0 0 6px;
+  }
+  .enroll-dek { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); margin: 0; }
+  .enroll-grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px; align-items: start;
+  }
+  @media (max-width: 820px) {
+    .enroll-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 12px 14px;
+    font-size: 11px; color: var(--muted); margin-bottom: 8px;
+  }
+  #enroll-chart {
+    width: 100%; height: auto; display: block;
+    background: #fbf7ec; border: 1px solid var(--rule); border-radius: 4px;
+  }
+  .chart-cap { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .enroll-stats { display: flex; flex-direction: column; gap: 14px; font-size: 12.5px; }
+  .stat { padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+  .stat:last-of-type { border-bottom: none; }
+  .stat-num {
+    font-family: "Fraunces", serif; font-size: 30px; line-height: 1;
+    font-weight: 500; letter-spacing: -0.015em;
+  }
+  .stat-num.loss { color: var(--loss); }
+  .stat-lab { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .stat-lab .muted { color: var(--muted); }
+  .stat-sub-hed {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px;
+  }
+  .stat-sub-body { font-size: 12.5px; line-height: 1.55; color: var(--ink-soft); }
+  .stat-sub-body b { color: var(--ink); font-weight: 600; }
+  .stat-attr { font-size: 10.5px; color: var(--muted); line-height: 1.55; margin-top: 4px; }
+  .stat-attr a { color: var(--ink-soft); text-decoration: underline; text-decoration-color: var(--rule); }
+
+  /* Methodology */
+  .method {
+    grid-column: 1 / -1;
+    font-size: 13px; line-height: 1.55; color: var(--ink-soft);
+  }
+  .method summary {
+    cursor: pointer; font-weight: 600; color: var(--ink);
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 12px 0; border-top: 1px solid var(--rule);
+    list-style: none;
+  }
+  .method summary::marker { display: none; }
+  .method summary::-webkit-details-marker { display: none; }
+  .method summary::after { content: "+"; float: right; font-size: 16px; font-weight: 400; }
+  .method[open] summary::after { content: "–"; }
+  .method p { margin: 10px 0; max-width: 72ch; }
+
+  /* Leaflet overrides */
+  .leaflet-container { background: var(--paper); font-family: inherit; }
+  .leaflet-popup-content-wrapper {
+    background: var(--paper); color: var(--ink);
+    border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    border: 1px solid var(--rule);
+  }
+  .leaflet-popup-tip { background: var(--paper); border: 1px solid var(--rule); }
+  .leaflet-popup-content { font-size: 12px; line-height: 1.5; margin: 12px 14px; }
+  .leaflet-popup-content b { font-family: "Fraunces", serif; font-weight: 500; }
+  /* Hover tooltip */
+  .leaflet-tooltip.tract-tip {
+    background: var(--paper); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    font-size: 12px; line-height: 1.5; padding: 10px 12px;
+    font-family: inherit; white-space: normal; max-width: 260px;
+  }
+  .leaflet-tooltip.tract-tip::before { display: none; }
+  .leaflet-tooltip.tract-tip b { font-family: "Fraunces", serif; font-weight: 500; font-size: 13px; }
+
+  /* Scrub slider (compact, de-emphasized) */
+  .scrub {
+    display: flex; gap: 10px; align-items: center;
+    font-size: 11px; color: var(--muted);
+    margin-top: 4px;
+  }
+  .scrub input[type=range] { flex: 1; }
+  .year-tag {
+    display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 2px;
+    background: var(--ink); color: var(--paper); letter-spacing: 0.04em;
+    text-transform: uppercase; font-weight: 600; vertical-align: middle;
+  }
+  .year-tag.interp { background: #cbc5b3; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <div class="mast-inner">
+    <div class="kicker">An older-adult geography of New York &middot; <a href="https://joshgreenman1973.github.io/nyc-child-density/" style="color:inherit;text-decoration:underline;text-decoration-color:var(--rule);">see the under-18 map</a></div>
+    <h1><span class="nobr">Where the <em>elders</em> are,</span><br>2000 to 2023</h1>
+    <p class="dek">Between 2000 and 2023 the region&rsquo;s population aged 65 and older grew from
+      <b id="dek-2000">1.46&nbsp;million</b> to <b id="dek-2023">2.03&nbsp;million</b> &mdash;
+      a gain of about <b id="dek-gain">570,000</b> (<span id="dek-gain-pct">+39%</span>). Within that
+      total, the five boroughs gained <b id="dek-nyc">300,000</b> seniors
+      (<span id="dek-nyc-pct">+34%</span>) and the inner-ring suburbs gained
+      <b id="dek-sub">270,000</b> (<span id="dek-sub-pct">+47%</span>). The mirror image of the
+      child story: as the under-18 count fell by hundreds of thousands, the 65-plus count rose
+      by roughly the same magnitude. The map below shows where the elders are now &mdash; aging
+      in place, moving in, or both.</p>
+  </div>
+</div>
+
+<main>
+
+  <div class="bar">
+    <div class="bar-row">
+      <span class="bar-label">Age group</span>
+      <button class="chip age-chip on" data-band="all65">All <span style="color:var(--muted);font-weight:400">(65+)</span></button>
+      <button class="chip age-chip" data-band="65_74">65&ndash;74</button>
+      <button class="chip age-chip" data-band="75_84">75&ndash;84</button>
+      <button class="chip age-chip" data-band="85plus">85+</button>
+    </div>
+
+    <!-- Controls shown ONLY in all-65+ mode: compare two years, full controls -->
+    <div id="u18-controls">
+      <div class="bar-row">
+        <span class="bar-label">Measure</span>
+        <button class="chip measure-chip on" data-measure="density"
+          data-tip="<b>Density</b> = seniors &divide; land area (people 65+ per sq&nbsp;mi).<br><br>Highlights the most senior-packed corners of the region &mdash; but the score is driven as much by <i>overall</i> housing density as by whether the neighborhood is age-tilted. A high-rise UES tract will look senior-dense even if seniors are a minority of its residents.">Density <span style="color:var(--muted);font-weight:400">(seniors per sq mi)</span></button>
+        <button class="chip measure-chip" data-measure="share"
+          data-tip="<b>Share 65+</b> = seniors &divide; total population (a percent).<br><br>Controls for overall density. A tract with 2,000 seniors and 8,000 other residents scores the same (20%) as a tract with 200 seniors and 800 others. High numbers mean a neighborhood is <i>disproportionately</i> older &mdash; either through aging-in-place, in-migration of retirees, or out-migration of younger residents.">Share 65+ <span style="color:var(--muted);font-weight:400">(% of total pop)</span></button>
+        <span class="info-icon" data-tip="<b>Density</b> tells you <i>where the elders physically are</i>. <b>Share</b> tells you <i>where elders are over-represented</i>. They can disagree sharply: Penn South in Chelsea has very high density <i>and</i> share (a NORC). Massapequa has only moderate density of seniors but a high share (a postwar suburb whose original buyers stayed put). Midtown has high density of seniors as a count but a moderate share &mdash; lots of everybody packed in.">?</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--muted);" id="measure-note"></span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">View</span>
+        <span class="mode-toggle">
+          <button class="chip mode-chip on" data-mode="delta"
+            data-tip="<b>Compare two years.</b> The map colors each tract by how much it <i>changed</i> between a &lsquo;from&rsquo; year and a &lsquo;to&rsquo; year. Red = gain, blue = loss, white = within &plusmn;10%. Use this to see where the senior population grew or shrank.">Compare two years</button>
+          <button class="chip mode-chip" data-mode="snapshot"
+            data-tip="<b>Single year.</b> The map colors each tract by its <i>value</i> in one year &mdash; either density (seniors per sq mi) or share (% 65+). No comparison; just a snapshot of where seniors live in that year.">Single year</button>
+        </span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--muted)" id="mode-help">Map colors show <b style="color:var(--ink-soft);font-weight:600">change</b> in density between two years.</span>
+      </div>
+
+      <!-- Delta-mode controls -->
+      <div class="bar-row mode-only-delta" id="delta-row">
+        <span class="bar-label">Years</span>
+        <button class="chip on" data-preset="2000,2023">2000 → 2023</button>
+        <button class="chip" data-preset="2000,2010">2000 → 2010</button>
+        <button class="chip" data-preset="2010,2020">2010 → 2020</button>
+        <button class="chip" data-preset="2010,2023">2010 → 2023</button>
+        <button class="chip" data-preset="2020,2023">2020 → 2023</button>
+        <span class="bar-sep"></span>
+        <span style="font-size:11px;color:var(--muted);">or pick</span>
+        <select class="chip" id="from-year"></select>
+        <span style="font-size:11px;color:var(--muted);">→</span>
+        <select class="chip" id="to-year"></select>
+        <span style="flex:1"></span>
+        <span class="scrub" style="flex-basis:240px;">
+          <span>Scrub end year</span>
+          <input type="range" id="scrub" min="2000" max="2023" step="1" value="2023">
+        </span>
+      </div>
+
+      <!-- Snapshot-mode controls -->
+      <div class="bar-row mode-only-snap" id="snap-row" style="display:none">
+        <span class="bar-label">Year</span>
+        <select class="chip" id="snap-year"></select>
+        <span style="flex:1"></span>
+        <span class="scrub" style="flex-basis:240px;">
+          <span>Scrub year</span>
+          <input type="range" id="snap-scrub" min="2000" max="2023" step="1" value="2023">
+        </span>
+      </div>
+    </div>
+
+    <!-- Controls shown ONLY in age-band mode: snapshot-only year picker -->
+    <div id="band-controls" style="display:none;">
+      <div class="bar-row">
+        <span class="bar-label">Year</span>
+        <select class="chip" id="band-year"></select>
+        <span style="flex:1"></span>
+        <span class="scrub" style="flex-basis:260px;">
+          <span>Scrub</span>
+          <input type="range" id="band-scrub" min="2000" max="2023" step="1" value="2023">
+        </span>
+      </div>
+      <div class="bar-row" style="padding-top:8px;border-top:1px dashed var(--rule);margin-top:4px;">
+        <span style="font-size:11px;color:var(--muted);line-height:1.5;">
+          <b style="color:var(--ink-soft);">Age-band view is a density snapshot only.</b>
+          The 65&ndash;74 / 75&ndash;84 / 85+ split comes from decennial P12 and ACS B01001,
+          which report 2000, 2010, and 2011&ndash;2023 &mdash; no 2001&ndash;2009 in between.
+          Year-over-year change isn&rsquo;t shown for bands because the decade gap would be
+          misleading. Toggle back to <i>All (65+)</i> to compare across years.
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="map-card">
+    <div class="map-hed">
+      <h2 class="map-title" id="map-title">
+        <span class="from">2000</span><span class="arrow">→</span><span>2023</span>
+      </h2>
+      <div class="map-sub" id="map-sub">Change in seniors per square mile, by 2010 census tract.
+        Red = gain, blue = loss, white = within ±10%.
+        <span style="white-space:nowrap;color:var(--ink-soft);">
+          &nbsp;·&nbsp; Click a <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gain);border:1.5px solid var(--paper);box-shadow:0 0 0 1px var(--ink);vertical-align:middle;"></span>
+          or <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--loss);border:1.5px solid var(--paper);box-shadow:0 0 0 1px var(--ink);vertical-align:middle;"></span>
+          for the story behind a notable tract.
+        </span></div>
+    </div>
+    <div id="map"></div>
+    <div class="legend-bar" id="legend"></div>
+  </div>
+
+  <aside class="rail">
+    <div class="card">
+      <div class="card-hed">Total residents 65+</div>
+      <div id="totals"></div>
+    </div>
+    <div class="card">
+      <div class="card-hed"><span id="gainers-hed-label">Biggest gainers</span> <span id="gainers-hed-range" style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;"></span></div>
+      <ol class="row-list" id="gainers"></ol>
+    </div>
+    <div class="card">
+      <div class="card-hed"><span id="losers-hed-label">Biggest losers</span> <span id="losers-hed-range" style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400;"></span></div>
+      <ol class="row-list" id="losers"></ol>
+    </div>
+  </aside>
+
+
+  <details class="method">
+    <summary>Methodology</summary>
+    <p><b>Data.</b> Counts of persons aged 65 and older by tract for 2000, 2010, 2020 (decennial
+      census, table P012 in 2000 and 2010 SF1, P12 in 2020 DHC) and 2011 through 2023 (American
+      Community Survey 5-year estimates, table B01001). The 65+ count is the sum of six male and
+      six female age cells (65&ndash;66, 67&ndash;69, 70&ndash;74, 75&ndash;79, 80&ndash;84, 85+).
+      Each year between 2011 and 2023 is a measured ACS estimate. The 2001&ndash;2009 gap between
+      decennials is linearly interpolated.</p>
+    <p><b>Why 2000&ndash;2023 (and not 1970&ndash;2023).</b> The companion under-18 map covers 1970
+      forward because NHGIS publishes a time-series table for &ldquo;persons under 18&rdquo; with
+      tract counts already crosswalked to 2010 boundaries. There is no equivalent ready-made
+      time-series table for 65+, so extending the senior map back to 1970 requires a fresh NHGIS
+      extract plus an area-weighted crosswalk on the historical tract polygons. We&rsquo;ve started
+      with the 2000&ndash;2023 window (entirely available from the Census API) because that is also
+      the most editorially interesting span for seniors &mdash; it covers the entire boomer-cohort
+      transition into retirement age. A 1970&ndash;2023 backfill is on the to-do list.</p>
+    <p><b>Age-group filter.</b> The &ldquo;Age group&rdquo; chip row lets you restrict the map,
+      totals, and ranked lists to one of three bands: 65&ndash;74, 75&ndash;84, or 85+. Each is a
+      direct sum of the underlying P012/P12/B01001 cells &mdash; never interpolated.</p>
+    <p><b>Geography.</b> The study area is the five boroughs of New York City plus every county
+      sharing a land or water border with NYC: Westchester and Nassau (NY); Bergen, Hudson, Union,
+      and Middlesex (NJ). Everything is rendered on 2010 census tract boundaries. Tract polygons
+      are clipped against TIGER/Line AREAWATER (rivers, harbor) and AREALM (parks, cemeteries,
+      airports, and military installations) so non-residential land is not painted by the
+      choropleth. Neighborhood labels in the ranked lists come from NYC Planning&rsquo;s 2020
+      Neighborhood Tabulation Areas (inside the five boroughs) and TIGER PLACE 2020
+      (incorporated and census-designated places elsewhere).</p>
+    <p><b>Density.</b> Seniors per square mile = count &divide; land area in sq mi. Land area is
+      computed from 2010 TIGER cartographic boundaries projected to EPSG:2263 (NY State Plane,
+      Long Island, survey feet). Tracts under 0.005 sq mi (airports, parks, water) are excluded.</p>
+    <p><b>Share 65+.</b> The &ldquo;Share 65+&rdquo; measure divides the count of residents 65 and
+      older by the tract&rsquo;s total population and reports a percent. This controls for overall
+      density &mdash; a tract with 2,000 seniors and 8,000 other residents scores the same as one
+      with 200 seniors and 800 others. Denominators come from decennial table P012/P12 (2000, 2010,
+      2020) and ACS B01001 (2011&ndash;2023), interpolated linearly across the 2001&ndash;2009 gap.
+      In snapshot mode the map colors each tract by its share. In delta mode the map colors by
+      <i>percentage-point change</i> (a tract going from 25% to 20% shows as &minus;5 pp, not &minus;20%).
+      Tracts with fewer than 50 seniors or fewer than 200 people total are masked.</p>
+    <p><b>Change calculation.</b> The map colors each tract by percent change in density between
+      the &ldquo;from&rdquo; and &ldquo;to&rdquo; year. The ranked &ldquo;biggest gainers&rdquo;
+      and &ldquo;biggest losers&rdquo; lists use <i>absolute</i> change (seniors added or lost),
+      not percent change, because percent change is unstable on small bases. The ranked lists also
+      aggregate all tracts within a neighborhood so the number reported is the neighborhood-wide
+      change, not a single cherry-picked tract inside it. Neighborhoods with fewer than 200
+      seniors at both endpoints are excluded.</p>
+    <p><b>Masking low-count tracts.</b> Tracts with fewer than 50 seniors in both the &ldquo;from&rdquo;
+      and &ldquo;to&rdquo; year are drawn in neutral gray rather than colored. Without this mask
+      the map would be dominated by parks, cemeteries, and institutional sites where the AREALM
+      clip didn&rsquo;t fully remove the polygon. Totals and ranked lists are unaffected.</p>
+    <p><b>Caveats.</b> (1) ACS 5-year estimates carry margins of error at the tract level. The
+      ranked lists should be read as order-of-magnitude, not precise; year-over-year wiggles in a
+      single tract often fall inside the ACS error bar. (2) Tract GEOIDs for ACS endyears 2020
+      through 2023 use 2020 boundaries; where a 2020 GEOID differs from its 2010 counterpart the
+      ACS value joins the 2010 tract by exact string match. (3) The parks/cemeteries/landmarks
+      clip relies on TIGER AREALM, which is incomplete in urban areas. The low-count mask (above)
+      compensates. (4) Aging-in-place and in-migration look identical in this data &mdash; you can
+      see <i>that</i> a tract&rsquo;s 65+ population grew, but not <i>why</i>. The story markers on
+      the map propose specific mechanisms (NORC, retirement community, postwar suburb, etc.) based
+      on knowledge of those neighborhoods, not from the data itself.</p>
+    <p><b>Sources.</b> U.S. Census Bureau via api.census.gov.
+      Companion site:
+      <a href="https://joshgreenman1973.github.io/nyc-child-density/">where the children went, 1970&ndash;2023</a>.
+      Source code:
+      <a href="https://github.com/joshgreenman1973/nyc-senior-density">github.com/joshgreenman1973/nyc-senior-density</a>.</p>
+  </details>
+
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---------- data ----------
+const YEAR_MIN = 2000, YEAR_MAX = 2023;
+const SHARE_YEAR_MIN = 2000;      // totals_timeseries.json covers 2000-2023 only
+let BASE = null, TS = null, COUNTS = null, SUMMARY = null, NBHD = {};
+let AGEBANDS = null;             // loaded from seniors_bands.json (keyed by geoid)
+let TOTALS = null;               // loaded from totals_timeseries.json (keyed by gj, 2000-2023)
+let AREA = {};                   // gisjoin -> land_sqmi (precomputed)
+let GEOID = {};                  // gisjoin -> geoid (precomputed)
+let state = { mode: "delta", from: 2000, to: 2023, band: "all65", measure: "density" };
+const BAND_YEARS_SET = new Set();   // years available for non-u18 bands
+const BAND_LABEL = {
+  all65: "65+", "65_74": "65–74", "75_84": "75–84", "85plus": "85+",
+};
+
+// ---------- data accessors (band-aware) ----------
+function countBand(gj, year, band) {
+  if (band === "all65") return COUNTS.tracts[gj] ? COUNTS.tracts[gj][year - YEAR_MIN] : 0;
+  const geoid = GEOID[gj];
+  const rec = AGEBANDS && geoid && AGEBANDS.tracts[geoid];
+  if (!rec || !rec[band]) return 0;
+  const v = rec[band][year];
+  return v == null ? 0 : v;
+}
+function densityBand(gj, year, band) {
+  if (band === "all65") return TS.tracts[gj] ? TS.tracts[gj][year - YEAR_MIN] : 0;
+  const c = countBand(gj, year, band);
+  const a = AREA[gj] || 0;
+  return a > 0 ? c / a : 0;
+}
+function bandTotalAt(year, band) {
+  if (band === "all65") return SUMMARY.total[year] || 0;
+  let t = 0;
+  if (!AGEBANDS) return 0;
+  for (const gj in AGEBANDS.tracts) {
+    const rec = AGEBANDS.tracts[gj][band];
+    if (rec && rec[year] != null) t += rec[year];
+  }
+  return t;
+}
+
+// Absolute density palette (sequential, warm)
+const D_BREAKS = [0, 2000, 5000, 10000, 20000, 35000, 60000];
+const D_COLORS = ["#efe8d4", "#f6d79a", "#efa86a", "#d97742", "#b84c27", "#7d1c0a"];
+
+// Share-under-18 palette. Regional mean sits around 20-21%. Diverging around
+// the regional mean makes "family neighborhood" vs "adult neighborhood" legible.
+// Low (fewer seniors per capita) = muted teal; high = warm orange.
+const S_BREAKS = [0, 10, 15, 20, 25, 30, 40];  // percent cuts
+const S_COLORS = ["#2e7c86", "#6fa9ad", "#bcd0c9", "#ead9b9", "#e4a97a", "#c77237", "#8a3c14"];
+
+// Delta palette (diverging, muted) — percent-change for density, point-change for share
+const DELTA_STOPS = [
+  { lt: -75, c: "#2a5a85" },
+  { lt: -50, c: "#457ba8" },
+  { lt: -25, c: "#7ea8cc" },
+  { lt: -10, c: "#c1d5e4" },
+  { lt:  10, c: "#f4efdf" },   // neutral band
+  { lt:  25, c: "#e9c2a8" },
+  { lt:  50, c: "#d48966" },
+  { lt: 100, c: "#a8492b" },
+  { lt:  1e9,c: "#6e1e0b" },
+];
+// Share-delta stops in percentage points (not percent of percent — one
+// share-point is absolute: e.g. 25%→20% = −5 points).
+const SHARE_DELTA_STOPS = [
+  { lt: -10, c: "#2a5a85" },
+  { lt:  -5, c: "#457ba8" },
+  { lt:  -2, c: "#7ea8cc" },
+  { lt:  -0.5, c: "#c1d5e4" },
+  { lt:   0.5, c: "#f4efdf" },   // neutral band
+  { lt:   2, c: "#e9c2a8" },
+  { lt:   5, c: "#d48966" },
+  { lt:  10, c: "#a8492b" },
+  { lt: 1e9, c: "#6e1e0b" },
+];
+
+function colorDensity(d) {
+  if (!d || d <= 0) return "#eee7d4";
+  for (let i = D_BREAKS.length - 1; i >= 0; i--) {
+    if (d >= D_BREAKS[i]) return D_COLORS[Math.min(i, D_COLORS.length - 1)];
+  }
+  return D_COLORS[0];
+}
+function colorShare(pct) {
+  if (pct == null || !isFinite(pct)) return "#eee7d4";
+  for (let i = S_BREAKS.length - 1; i >= 0; i--) {
+    if (pct >= S_BREAKS[i]) return S_COLORS[Math.min(i, S_COLORS.length - 1)];
+  }
+  return S_COLORS[0];
+}
+function colorDelta(pct) {
+  if (pct === null || !isFinite(pct)) return "#eee7d4";
+  for (const s of DELTA_STOPS) if (pct < s.lt) return s.c;
+  return DELTA_STOPS[DELTA_STOPS.length - 1].c;
+}
+function colorShareDelta(pts) {
+  if (pts === null || !isFinite(pts)) return "#eee7d4";
+  for (const s of SHARE_DELTA_STOPS) if (pts < s.lt) return s.c;
+  return SHARE_DELTA_STOPS[SHARE_DELTA_STOPS.length - 1].c;
+}
+
+function densityAt(gj, y) { return densityBand(gj, y, state.band); }
+function countAt(gj, y)   { return countBand(gj, y, state.band); }
+
+// Total-population accessor (2000-2023 only; returns null for out-of-range years).
+function totalAt(gj, y) {
+  if (!TOTALS || y < SHARE_YEAR_MIN || y > YEAR_MAX) return null;
+  const arr = TOTALS.tracts[gj];
+  return arr ? arr[y - SHARE_YEAR_MIN] : null;
+}
+// Share 65+ as a percentage (0-100) for a tract-year. null if denom is
+// below a sanity floor (cemeteries, parks, and other non-residential tract
+// polygons sometimes accumulate crosswalked children without a corresponding
+// residential population — e.g. Mt. Hebron Cemetery with 77 "kids" and 0
+// residents. Clamping prevents these from polluting aggregates or ranks.)
+const SHARE_POP_FLOOR = 50;
+function shareAt(gj, y) {
+  const tot = totalAt(gj, y);
+  if (!tot || tot < SHARE_POP_FLOOR) return null;
+  return 100 * countAt(gj, y) / tot;
+}
+// Regional aggregate share for a given year (weighted by raw counts). Uses the
+// same pop floor so cemetery/park artifacts don't bias the citywide number.
+function regionShareAt(y) {
+  if (!TOTALS || y < SHARE_YEAR_MIN || y > YEAR_MAX) return null;
+  let kids = 0, people = 0;
+  for (const gj in TOTALS.tracts) {
+    const t = totalAt(gj, y);
+    if (!t || t < SHARE_POP_FLOOR) continue;
+    kids += countAt(gj, y); people += t;
+  }
+  return people > 0 ? 100 * kids / people : null;
+}
+// Unified "value at" — the metric currently being mapped, for a tract-year.
+// Used by map coloring, popup, and rankings.
+function metricAt(gj, y) {
+  return state.measure === "share" ? shareAt(gj, y) : densityAt(gj, y);
+}
+function isReal(y) {
+  if (state.band === "all65") return SUMMARY.real_anchor_years.includes(y);
+  // Age bands are never interpolated — every year present is directly measured.
+  return BAND_YEARS_SET.has(y);
+}
+function bandHasYear(y) {
+  if (state.band === "all65") return true;
+  return BAND_YEARS_SET.has(y);
+}
+
+
+// ---------- map ----------
+const map = L.map("map", { zoomControl: true, preferCanvas: true })
+  .setView([40.78, -73.95], 10);
+L.tileLayer("https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_nolabels/{z}/{x}/{y}.png", {
+  attribution: "&copy; OpenStreetMap &copy; CARTO",
+  subdomains: "abcd", maxZoom: 18,
+}).addTo(map);
+L.tileLayer("https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_only_labels/{z}/{x}/{y}.png", {
+  subdomains: "abcd", maxZoom: 18, pane: "shadowPane",
+}).addTo(map);
+
+// ---------- curated story markers ----------
+// Hand-picked tracts with a documented narrative. Each story is checked against
+// the underlying time series before being displayed.
+const STORIES = {
+  // GAINS — places where the 65+ population grew the most, or whose share is most striking
+  "G3600610014602": {
+    type: "gain",
+    title: "Upper East Side &mdash; Yorkville",
+    place: "Manhattan",
+    body: "The single-largest tract gain in seniors anywhere in the region: from " +
+          "about 780 residents 65+ in 2000 to more than 2,500 in 2023. Aging-in-place " +
+          "is part of the story; in-migration of older empty-nesters into UES " +
+          "high-rises is the rest. The neighborhood&rsquo;s walkability, density of " +
+          "medical care, and stable rent-stabilized stock make it one of the most " +
+          "&lsquo;senior-friendly&rsquo; corners of the country.",
+  },
+  "G3400230008205": {
+    type: "gain",
+    title: "Concordia",
+    place: "Monroe Township, NJ",
+    body: "An age-restricted active-adult community (a real estate category that " +
+          "barely existed in 1970) where 84% of residents are 65 or older. Concordia " +
+          "and its neighbors &mdash; Clearbrook, Whittingham, Rossmoor &mdash; were " +
+          "built mostly in the 1980s and 1990s as a Sun Belt-style retirement " +
+          "destination an hour from NYC. The whole cluster shows up on the map as " +
+          "a deep-red bullseye.",
+  },
+  "G3600810155101": {
+    type: "gain",
+    title: "Glen Oaks &mdash; Floral Park",
+    place: "Queens",
+    body: "Glen Oaks Village, a 110-acre garden-apartment co-op opened in 1947, is " +
+          "one of New York&rsquo;s best-known Naturally Occurring Retirement Communities " +
+          "(NORCs) &mdash; a place that wasn&rsquo;t built for seniors but became one as " +
+          "the original 1950s-buyer cohort aged in place. About 88% of the residents " +
+          "of this tract are 65 or older.",
+  },
+  "G3600470036002": {
+    type: "gain",
+    title: "Brighton Beach",
+    place: "Brooklyn",
+    body: "The center of the region&rsquo;s Russian-Jewish &eacute;migr&eacute; " +
+          "community. A wave of arrivals from the former Soviet Union in the late " +
+          "1970s and 1990s settled densely along the boardwalk; that cohort is now " +
+          "in its 70s and 80s, producing one of the highest sustained senior shares " +
+          "(47%) of any tract in NYC outside a purpose-built complex.",
+  },
+  "G3600610009700": {
+    type: "gain",
+    title: "Penn South / Chelsea co-ops",
+    place: "Manhattan",
+    body: "Penn South, the Mutual Redevelopment Houses, is a limited-equity co-op " +
+          "built by the garment workers&rsquo; union in 1962. Decades of stable " +
+          "tenancy in a low-turnover building type made it the prototype " +
+          "Naturally Occurring Retirement Community &mdash; the term itself was " +
+          "coined here in 1986. Today about 41% of the tract is 65+.",
+  },
+  "G3600590522000": {
+    type: "gain",
+    title: "East Massapequa",
+    place: "Long Island, NY",
+    body: "A textbook postwar suburb: tract houses built in the 1950s and 1960s, " +
+          "originally bought by World War II veterans and their families. Most of " +
+          "those buyers stayed put. Sixty years later, the original owners (or " +
+          "their adult children who inherited the house) make up the bulk of the " +
+          "+1,400 senior gain in this single tract since 2000.",
+  },
+  // LOSSES — places where the 65+ count fell. Rare; usually high-turnover or high-fertility neighborhoods.
+  "G3600470023600": {
+    type: "loss",
+    title: "Borough Park",
+    place: "Brooklyn",
+    body: "The largest absolute decline in seniors of any tract in the region. The " +
+          "explanation isn&rsquo;t death or out-migration so much as <i>composition</i>: " +
+          "Borough Park&rsquo;s extraordinarily high Hasidic fertility rate keeps the " +
+          "neighborhood&rsquo;s overall median age in the late 20s, and senior counts " +
+          "lag because the younger generation outnumbers the older one many times over.",
+  },
+  "G3600610004100": {
+    type: "loss",
+    title: "SoHo &mdash; Little Italy",
+    place: "Manhattan",
+    body: "The decline here is largely the slow disappearance of the historic " +
+          "Italian-American community. Longtime tenants of Little Italy walk-ups " +
+          "passed away or moved out; the apartments that replaced them are mostly " +
+          "occupied by younger gentrifiers. Net effect: nearly 600 fewer residents " +
+          "65+ than in 2000.",
+  },
+  "G3400170010500": {
+    type: "loss",
+    title: "Bayonne",
+    place: "Hudson County, NJ",
+    body: "An older, traditionally Polish and Irish industrial city across the " +
+          "harbor from Staten Island. As longtime homeowners died and their " +
+          "row-houses were sold to younger commuting families, the senior count in " +
+          "this tract dropped by roughly 600 &mdash; one of the steeper percentage " +
+          "declines in the region.",
+  },
+  "G3600810073900": {
+    type: "loss",
+    title: "Forest Hills",
+    place: "Queens",
+    body: "Forest Hills was already an older neighborhood in 2000 (longstanding " +
+          "Jewish and German families) and the cohort that lived through that era " +
+          "is now mostly gone. Their replacement &mdash; a younger Bukharan, Russian, " +
+          "and South Asian wave &mdash; skews considerably younger, dropping the " +
+          "65+ count even as overall population held steady.",
+  },
+};
+
+let storyLayer = null;
+
+function buildStoryMarkers() {
+  storyLayer = L.layerGroup().addTo(map);
+  Object.entries(STORIES).forEach(([gj, s]) => {
+    const lyr = layerByGj.get(gj);
+    if (!lyr) return;
+    const c = lyr.getBounds().getCenter();
+    const cls = s.type === "gain" ? "story-marker gain" : "story-marker loss";
+    const ic = L.divIcon({
+      className: cls,
+      html: '<span class="story-dot"></span>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+    const m = L.marker(c, { icon: ic, riseOnHover: true, zIndexOffset: 1000 });
+    m.bindPopup(() => storyPopupHtml(gj, s), {
+      maxWidth: 320, className: "story-popup",
+    });
+    m.addTo(storyLayer);
+  });
+}
+
+function storyPopupHtml(gj, s) {
+  const k0 = countAt(gj, 2000), k1 = countAt(gj, 2023);
+  const sign = (k1 - k0) > 0 ? "+" : "−";
+  const absDiff = Math.abs(Math.round(k1 - k0)).toLocaleString();
+  const colorVar = s.type === "gain" ? "var(--gain)" : "var(--loss)";
+  const tag = s.type === "gain" ? "Aging in / moving in" : "Aging out";
+  return `
+    <div class="story-pop">
+      <div class="story-tag" style="color:${colorVar}">${tag}</div>
+      <div class="story-title">${s.title}</div>
+      <div class="story-place">${s.place}</div>
+      <div class="story-body">${s.body}</div>
+      <div class="story-nums">
+        <span>2000: <b>${k0 < 1 ? "&mdash;" : Math.round(k0).toLocaleString()}</b> seniors</span>
+        <span>2023: <b>${Math.round(k1).toLocaleString()}</b> seniors</span>
+        <span style="color:${colorVar}"><b>${sign}${absDiff}</b></span>
+      </div>
+    </div>
+  `;
+}
+
+const layerByGj = new Map();
+function buildLayer() {
+  L.geoJSON(BASE, {
+    style: () => ({ color: "#fff", weight: 0.25, fillOpacity: 0.9, fillColor: "#eee7d4" }),
+    onEachFeature: (f, l) => {
+      layerByGj.set(f.properties.gisjoin, l);
+      l.bindTooltip(() => popup(f), { sticky: true, direction: "top", opacity: 1, className: "tract-tip" });
+      l.on("mouseover", () => l.setStyle({ weight: 1.5, color: "#1a1915" }));
+      l.on("mouseout", () => l.setStyle({ weight: 0.25, color: "#fff" }));
+    },
+  }).addTo(map);
+}
+
+function popup(f) {
+  const gj = f.properties.gisjoin;
+  const area = f.properties.land_sqmi;
+  const bl = state.band === "all65" ? "" :
+    `<div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Age group: ${BAND_LABEL[state.band]}</div>`;
+  const head = `<b>${nbhdLabel(f)}</b><div style="color:var(--muted);font-size:11px;margin-bottom:4px;">Tract ${tractNumber(f)}</div>${bl}`;
+  const isShare = state.measure === "share";
+  if (state.mode === "snapshot") {
+    const y = state.to;
+    const d = densityAt(gj, y), k = countAt(gj, y);
+    const t = totalAt(gj, y), s = shareAt(gj, y);
+    const shareLine = isShare
+      ? `Share 65+: <b>${s == null ? "—" : s.toFixed(1) + "%"}</b><br>`
+      : "";
+    const totLine = isShare
+      ? `Total pop: ${t == null ? "—" : Math.round(t).toLocaleString()}<br>`
+      : "";
+    return `${head}
+      Year: ${y} <span class="year-tag${isReal(y) ? "" : " interp"}">${isReal(y) ? "measured" : "interpolated"}</span><br>
+      ${shareLine}
+      Density: <b>${Math.round(d).toLocaleString()}</b> seniors / sq mi<br>
+      Seniors: ${Math.round(k).toLocaleString()}<br>
+      ${totLine}
+      Land area: ${area.toFixed(2)} sq mi`;
+  }
+  const d0 = densityAt(gj, state.from), d1 = densityAt(gj, state.to);
+  const k0 = countAt(gj, state.from), k1 = countAt(gj, state.to);
+  const signed = (n) => (n > 0 ? "+" : "") + n.toLocaleString();
+  if (isShare) {
+    const s0 = shareAt(gj, state.from), s1 = shareAt(gj, state.to);
+    const pts = (s0 != null && s1 != null) ? (s1 - s0) : null;
+    const ptsStr = pts == null ? "—"
+      : (pts > 0 ? "+" : "") + pts.toFixed(1) + " pp";
+    const color = pts == null ? "var(--muted)" : (pts > 0 ? "var(--gain)" : "var(--loss)");
+    return `${head}
+      <span style="color:var(--muted)">${state.from}:</span> ${s0 == null ? "—" : s0.toFixed(1) + "%"} 65+ (${Math.round(k0).toLocaleString()} seniors)<br>
+      <span style="color:var(--muted)">${state.to}:</span> ${s1 == null ? "—" : s1.toFixed(1) + "%"} 65+ (${Math.round(k1).toLocaleString()} seniors)<br>
+      <b style="font-size:13px;color:${color}">${ptsStr}</b> change in share`;
+  }
+  const pct = d0 > 0 ? ((d1 - d0) / d0) * 100 : null;
+  return `${head}
+    <span style="color:var(--muted)">${state.from}:</span> ${Math.round(k0).toLocaleString()} seniors @ ${Math.round(d0).toLocaleString()}/sq mi<br>
+    <span style="color:var(--muted)">${state.to}:</span> ${Math.round(k1).toLocaleString()} seniors @ ${Math.round(d1).toLocaleString()}/sq mi<br>
+    <b style="font-size:13px;color:${pct == null ? "var(--muted)" : (pct > 0 ? "var(--gain)" : "var(--loss)")}">
+      ${signed(Math.round(k1 - k0))} seniors
+    </b> (${pct == null ? "-" : signed(Math.round(pct)) + "%"} density)`;
+}
+
+// ---------- render ----------
+function render() {
+  const { mode, from, to } = state;
+  // Thresholds.
+  //   MIN_KIDS   = floor below which a tract is "too small to be a data point"
+  //   NEW_KIDS   = a tract that went from <MIN_KIDS to >=NEW_KIDS is "new residential"
+  //                (landfill like Battery Park City, industrial conversion like Tribeca,
+  //                 greenfield like Co-op City/Starrett City)
+  const MIN_KIDS = 50;
+  const NEW_KIDS = 300;
+  const MIN_POP = 200;      // share denominator floor — tracts below are masked
+  const MASK = "#d8d2c0";   // neutral gray-beige (uncountable / park artifacts)
+  const NEW_COLOR = "#c98622"; // saturated amber (built from nothing)
+  const isShare = state.measure === "share";
+  // Map styles
+  layerByGj.forEach((l, gj) => {
+    let fill;
+    if (mode === "snapshot") {
+      const k = countAt(gj, to);
+      if (k < MIN_KIDS) {
+        fill = MASK;
+      } else if (isShare) {
+        const t = totalAt(gj, to);
+        fill = (t == null || t < MIN_POP) ? MASK : colorShare(shareAt(gj, to));
+      } else {
+        fill = colorDensity(densityAt(gj, to));
+      }
+    } else {
+      const k0 = countAt(gj, from), k1 = countAt(gj, to);
+      if (isShare) {
+        const t0 = totalAt(gj, from), t1 = totalAt(gj, to);
+        if (t0 == null || t1 == null || t0 < MIN_POP || t1 < MIN_POP
+            || k0 < MIN_KIDS || k1 < MIN_KIDS) {
+          fill = MASK;
+        } else {
+          const pts = shareAt(gj, to) - shareAt(gj, from);
+          fill = colorShareDelta(pts);
+        }
+      } else {
+        const d0 = densityAt(gj, from), d1 = densityAt(gj, to);
+        if (k0 < MIN_KIDS && k1 >= NEW_KIDS) {
+          fill = NEW_COLOR;                      // "new residential"
+        } else if (k0 < MIN_KIDS || k1 < MIN_KIDS) {
+          fill = MASK;                           // unusable (park, cemetery, sliver)
+        } else {
+          const pct = d0 > 0 ? ((d1 - d0) / d0) * 100 : null;
+          fill = colorDelta(pct);
+        }
+      }
+    }
+    l.setStyle({ fillColor: fill, color: "#fff", weight: 0.25, fillOpacity: 0.9 });
+  });
+
+  // Title
+  const title = document.getElementById("map-title");
+  const sub = document.getElementById("map-sub");
+  const bl = BAND_LABEL[state.band];
+  if (mode === "snapshot") {
+    if (isShare) {
+      title.innerHTML = `Share of population 65+, <span class="from">${to}</span>`;
+      sub.textContent = `Percent of total population that is ${bl}, by 2010 census tract. ${isReal(to) ? "Measured" : "Interpolated"} year.`;
+    } else {
+      title.innerHTML = `Children per square mile, <span class="from">${to}</span>`;
+      sub.textContent = `Absolute density of seniors (${bl}), by 2010 census tract. ${isReal(to) ? "Measured" : "Interpolated"} year.`;
+    }
+  } else {
+    title.innerHTML = `<span class="from">${from}</span><span class="arrow">→</span><span>${to}</span>`;
+    if (isShare) {
+      sub.textContent = `Change in share of population 65+ (${bl}), in percentage points, by 2010 census tract. Red = rising share, blue = falling share.`;
+    } else {
+      sub.textContent = `Change in density of seniors (${bl}), by 2010 census tract. Red = gain, blue = loss, white = within ±10%.`;
+    }
+  }
+
+  renderTotals();
+  renderRanked();
+  renderLegend();
+}
+
+function renderTotals() {
+  const { mode, from, to, band, measure } = state;
+  const wrap = document.getElementById("totals");
+  const label = BAND_LABEL[band];
+  const hed = document.querySelector(".rail .card .card-hed");
+  // Share mode: show regional share-under-18, not absolute child count.
+  if (measure === "share") {
+    hed.textContent = "Regional share 65+";
+    if (mode === "snapshot") {
+      const s = regionShareAt(to);
+      wrap.innerHTML = `
+        <div class="big-num">${s == null ? "—" : s.toFixed(1) + "%"}</div>
+        <div class="sub-num">${to} · ${isReal(to) ? "measured" : "interpolated"}</div>`;
+      return;
+    }
+    const s0 = regionShareAt(from), s1 = regionShareAt(to);
+    if (s0 == null || s1 == null) {
+      wrap.innerHTML = `<div class="big-num">—</div>
+        <div class="sub-num">Share data only available 2000–2023.</div>`;
+      return;
+    }
+    const pts = s1 - s0;
+    const cls = pts >= 0 ? "delta-pos" : "delta-neg";
+    wrap.innerHTML = `
+      <div class="big-num">${s1.toFixed(1)}%
+        <span class="delta ${cls}">${pts >= 0 ? "+" : ""}${pts.toFixed(1)} pp</span>
+      </div>
+      <div class="sub-num">${to} share, ${pts >= 0 ? "+" : ""}${pts.toFixed(1)} points vs ${from} (${s0.toFixed(1)}%)</div>`;
+    return;
+  }
+  // Density mode (original).
+  hed.textContent =
+    band === "all65" ? "Total residents 65+" : `Total residents (${label})`;
+  if (mode === "snapshot") {
+    const t = bandTotalAt(to, band);
+    wrap.innerHTML = `
+      <div class="big-num">${Math.round(t).toLocaleString()}</div>
+      <div class="sub-num">${to} · ${isReal(to) ? "measured" : "interpolated"}</div>`;
+    return;
+  }
+  const t0 = bandTotalAt(from, band), t1 = bandTotalAt(to, band);
+  const delta = Math.round(t1 - t0);
+  const pct = t0 > 0 ? (delta / t0) * 100 : 0;
+  const cls = delta >= 0 ? "delta-pos" : "delta-neg";
+  wrap.innerHTML = `
+    <div class="big-num">${Math.round(t1).toLocaleString()}
+      <span class="delta ${cls}">${delta >= 0 ? "+" : ""}${delta.toLocaleString()}</span>
+    </div>
+    <div class="sub-num">${to} total, ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% vs ${from} (${Math.round(t0).toLocaleString()})</div>`;
+}
+
+function renderRanked() {
+  const { mode, from, to, measure } = state;
+  const gainers = document.getElementById("gainers");
+  const losers = document.getElementById("losers");
+  const gHed = document.getElementById("gainers-hed-range");
+  const lHed = document.getElementById("losers-hed-range");
+  const gLabel = document.getElementById("gainers-hed-label");
+  const lLabel = document.getElementById("losers-hed-label");
+  const isShare = measure === "share";
+
+  if (mode === "snapshot") {
+    // Snapshot: if density, rank by kids/sq mi; if share, rank by share-under-18.
+    if (isShare) {
+      gLabel.textContent = "Highest share of seniors";
+      lLabel.textContent = "Lowest share of seniors";
+    } else {
+      gLabel.textContent = "Densest neighborhoods";
+      lLabel.textContent = "Least-dense neighborhoods";
+    }
+    gHed.textContent = ` (${to})`;
+    lHed.textContent = ` (${to}, populated)`;
+
+    const agg = new Map(); // name -> { kids, area, pop, n }
+    BASE.features.forEach(f => {
+      const gj = f.properties.gisjoin;
+      const name = NBHD[gj];
+      if (!name) return;
+      const k = countAt(gj, to);
+      const a = AREA[gj] || 0;
+      const p = totalAt(gj, to);
+      const r = agg.get(name) || { kids: 0, area: 0, pop: 0, n: 0 };
+      r.kids += k; r.area += a; if (p != null) r.pop += p; r.n += 1;
+      agg.set(name, r);
+    });
+    const rows = [];
+    agg.forEach((r, name) => {
+      if (r.kids < 200) return;
+      if (isShare) {
+        if (r.pop < 2000) return;
+        rows.push({ name, value: 100 * r.kids / r.pop, n: r.n, kids: r.kids });
+      } else {
+        if (r.area <= 0) return;
+        rows.push({ name, value: r.kids / r.area, n: r.n, kids: r.kids });
+      }
+    });
+    const top = [...rows].sort((a, b) => b.value - a.value).slice(0, 7);
+    const bot = [...rows].sort((a, b) => a.value - b.value).slice(0, 7);
+    const fmt = r => isShare
+      ? `${r.value.toFixed(1)}<span style="color:var(--muted);font-weight:400;font-family:inherit;font-size:10px;"> %</span>`
+      : `${Math.round(r.value).toLocaleString()}<span style="color:var(--muted);font-weight:400;font-family:inherit;font-size:10px;"> /mi²</span>`;
+    const rowHtml = r =>
+      `<li><span class="geo">${r.name}<span style="color:var(--muted);font-weight:400;"> · ${r.n} tract${r.n===1?"":"s"}</span></span><span class="val">${fmt(r)}</span></li>`;
+    gainers.innerHTML = top.map(rowHtml).join("");
+    losers.innerHTML  = bot.map(rowHtml).join("");
+    return;
+  }
+
+  // Delta mode.
+  gHed.textContent = ` (${from}→${to})`;
+  lHed.textContent = ` (${from}→${to})`;
+  if (isShare) {
+    // Rank by percentage-point change in share under 18.
+    gLabel.textContent = "Biggest share gains";
+    lLabel.textContent = "Biggest share drops";
+    const agg = new Map();
+    BASE.features.forEach(f => {
+      const gj = f.properties.gisjoin;
+      const name = NBHD[gj];
+      if (!name) return;
+      const p0 = totalAt(gj, from), p1 = totalAt(gj, to);
+      if (p0 == null || p1 == null) return;
+      const k0 = countAt(gj, from), k1 = countAt(gj, to);
+      const r = agg.get(name) || { k0: 0, k1: 0, p0: 0, p1: 0, n: 0 };
+      r.k0 += k0; r.k1 += k1; r.p0 += p0; r.p1 += p1; r.n += 1;
+      agg.set(name, r);
+    });
+    const ranked = [];
+    agg.forEach((r, name) => {
+      if (r.p0 < 2000 || r.p1 < 2000) return;
+      const s0 = 100 * r.k0 / r.p0, s1 = 100 * r.k1 / r.p1;
+      ranked.push({ name, s0, s1, pts: s1 - s0, n: r.n });
+    });
+    const gain = [...ranked].sort((a, b) => b.pts - a.pts).slice(0, 7);
+    const loss = [...ranked].sort((a, b) => a.pts - b.pts).slice(0, 7);
+    const fmt = r => `${r.pts >= 0 ? "+" : ""}${r.pts.toFixed(1)}<span style="color:var(--muted);font-weight:400;font-family:inherit;font-size:10px;"> pp</span>`;
+    const rowHtml = (r, cls) =>
+      `<li><span class="geo">${r.name}<span style="color:var(--muted);font-weight:400;"> · ${r.n} tract${r.n===1?"":"s"}</span></span><span class="val ${cls}">${fmt(r)}</span></li>`;
+    gainers.innerHTML = gain.map(r => rowHtml(r, "delta-pos")).join("");
+    losers.innerHTML = loss.map(r => rowHtml(r, "delta-neg")).join("");
+    return;
+  }
+
+  // Density delta (original): gainers / losers by absolute child-count change.
+  gLabel.textContent = "Biggest gainers";
+  lLabel.textContent = "Biggest losers";
+  const agg = new Map(); // name -> { k0, k1, nTracts }
+  BASE.features.forEach(f => {
+    const gj = f.properties.gisjoin;
+    const name = NBHD[gj];
+    if (!name) return;
+    const k0 = countAt(gj, from), k1 = countAt(gj, to);
+    const a = agg.get(name) || { k0: 0, k1: 0, n: 0 };
+    a.k0 += k0; a.k1 += k1; a.n += 1;
+    agg.set(name, a);
+  });
+  const ranked = [];
+  agg.forEach((a, name) => {
+    if (a.k0 < 500 && a.k1 < 500) return;
+    ranked.push({ name, k0: a.k0, k1: a.k1, delta: a.k1 - a.k0, n: a.n });
+  });
+  const gain = [...ranked].sort((a, b) => b.delta - a.delta).slice(0, 7);
+  const loss = [...ranked].sort((a, b) => a.delta - b.delta).slice(0, 7);
+  const signed = (n) => (n > 0 ? "+" : "") + Math.round(n).toLocaleString();
+  const rowHtml = (r, cls) =>
+    `<li><span class="geo">${r.name}<span style="color:var(--muted);font-weight:400;"> · ${r.n} tract${r.n===1?"":"s"}</span></span><span class="val ${cls}">${signed(r.delta)}</span></li>`;
+  gainers.innerHTML = gain.map(r => rowHtml(r, "delta-pos")).join("");
+  losers.innerHTML = loss.map(r => rowHtml(r, "delta-neg")).join("");
+}
+
+function tractNumber(f) {
+  const tract = f.properties.geoid.slice(5);
+  return (parseInt(tract) / 100).toFixed(2).replace(/\.00$/, "");
+}
+function countyName(f) {
+  const geoid = f.properties.geoid;
+  return COUNTY_NAMES[geoid.slice(0, 5)] || "";
+}
+function nbhdLabel(f) {
+  const nb = NBHD[f.properties.gisjoin];
+  if (nb) return nb;
+  return `${countyName(f)} · Tract ${tractNumber(f)}`;
+}
+function label(f) { return nbhdLabel(f); }
+const COUNTY_NAMES = {
+  "36005":"Bronx","36047":"Brooklyn","36061":"Manhattan","36081":"Queens","36085":"Staten Island",
+  "36119":"Westchester","36059":"Nassau",
+  "34003":"Bergen","34017":"Hudson","34039":"Union","34023":"Middlesex",
+};
+
+function renderLegend() {
+  const el = document.getElementById("legend");
+  const isShare = state.measure === "share";
+  if (state.mode === "snapshot") {
+    if (isShare) {
+      let html = `<span class="leg"><b style="color:var(--ink);font-family:'Fraunces',serif;font-weight:500;margin-right:4px;">% 65+</b></span>`;
+      for (let i = 0; i < S_BREAKS.length; i++) {
+        const hi = S_BREAKS[i + 1];
+        const lbl = hi ? `${S_BREAKS[i]}\u2013${hi}%` : `${S_BREAKS[i]}%+`;
+        html += `<span class="leg"><span class="sw" style="background:${S_COLORS[Math.min(i, S_COLORS.length-1)]}"></span>${lbl}</span>`;
+      }
+      html += `<span class="leg"><span class="sw" style="background:#d8d2c0"></span>too few children or too small a population</span>`;
+      el.innerHTML = html;
+      return;
+    }
+    let html = `<span class="leg"><b style="color:var(--ink);font-family:'Fraunces',serif;font-weight:500;margin-right:4px;">Children / sq mi</b></span>`;
+    for (let i = 0; i < D_BREAKS.length; i++) {
+      const hi = D_BREAKS[i + 1];
+      const lbl = hi ? `${(D_BREAKS[i]/1000).toFixed(0)}k` : `${(D_BREAKS[i]/1000).toFixed(0)}k+`;
+      html += `<span class="leg"><span class="sw" style="background:${D_COLORS[Math.min(i, D_COLORS.length-1)]}"></span>${lbl}</span>`;
+    }
+    el.innerHTML = html;
+    return;
+  }
+  // Delta mode
+  if (isShare) {
+    let html = `<span class="leg"><b style="color:var(--ink);font-family:'Fraunces',serif;font-weight:500;margin-right:4px;">Change in % under 18 (percentage points)</b></span>`;
+    const labels = ["\u2212 10+ pp","\u2212 10 to \u22125","\u2212 5 to \u22122","\u2212 2 to \u22120.5","\u00b10.5","+0.5 to +2","+2 to +5","+5 to +10","+10+ pp"];
+    SHARE_DELTA_STOPS.forEach((s, i) => {
+      html += `<span class="leg"><span class="sw" style="background:${s.c}"></span>${labels[i]}</span>`;
+    });
+    html += `<span class="leg"><span class="sw" style="background:#d8d2c0"></span>too few children or too small a population</span>`;
+    el.innerHTML = html;
+    return;
+  }
+  let html = `<span class="leg"><b style="color:var(--ink);font-family:'Fraunces',serif;font-weight:500;margin-right:4px;">Change in density</b></span>`;
+  const labels = ["-75%+","-75 to -50","-50 to -25","-25 to -10","±10%","+10 to +25","+25 to +50","+50 to +100","+100%+"];
+  DELTA_STOPS.forEach((s, i) => {
+    html += `<span class="leg"><span class="sw" style="background:${s.c}"></span>${labels[i]}</span>`;
+  });
+  html += `<span class="leg"><span class="sw" style="background:#c98622"></span>new residential (landfill / industrial conversion)</span>`;
+  html += `<span class="leg"><span class="sw" style="background:#d8d2c0"></span>too few children</span>`;
+  el.innerHTML = html;
+}
+
+// ---------- controls ----------
+// Year dropdowns
+const ANCHOR_YEARS = [1970, 1980, 1990, 2000, 2010, 2015, 2020, 2023];
+function populateYears() {
+  const fy = document.getElementById("from-year");
+  const ty = document.getElementById("to-year");
+  const sy = document.getElementById("snap-year");
+  for (const y of ANCHOR_YEARS) {
+    fy.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+    ty.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+    if (sy) sy.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+  }
+  fy.value = "1970"; ty.value = "2023";
+  if (sy) sy.value = "2023";
+  fy.addEventListener("change", () => { state.from = +fy.value; clearPresetHighlight(); render(); });
+  ty.addEventListener("change", () => { state.to = +ty.value; clearPresetHighlight(); render(); });
+}
+
+function clearPresetHighlight() {
+  document.querySelectorAll(".chip[data-preset]").forEach(c => c.classList.remove("on"));
+}
+
+document.querySelectorAll(".chip[data-preset]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const [f, t] = btn.dataset.preset.split(",").map(Number);
+    state.from = clampToBand(f);
+    state.to = clampToBand(t);
+    document.getElementById("from-year").value = state.from;
+    document.getElementById("to-year").value = state.to;
+    document.getElementById("scrub").value = state.to;
+    if (state.mode !== "delta") applyMode("delta");
+    clearPresetHighlight();
+    btn.classList.add("on");
+    render();
+  });
+});
+
+function clampToBand(y) {
+  if (state.band === "all65") return y;
+  const valid = [...BAND_YEARS_SET].sort((a,b)=>a-b);
+  if (valid.includes(y)) return y;
+  // snap to the closest available band year
+  let best = valid[0], bd = Math.abs(valid[0] - y);
+  for (const v of valid) {
+    const d = Math.abs(v - y);
+    if (d < bd) { bd = d; best = v; }
+  }
+  return best;
+}
+
+document.querySelectorAll(".chip.age-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const band = btn.dataset.band;
+    if (band === state.band) return;
+    state.band = band;
+    document.querySelectorAll(".chip.age-chip").forEach(c => c.classList.toggle("on", c === btn));
+    // Non-u18 bands: force snapshot mode (the data only exists for a handful of
+    // years, and a sparse delta view is confusing). Also force density measure
+    // — share-under-18 is only meaningful for the whole under-18 group.
+    // Toggling back to u18 leaves the mode alone.
+    if (band !== "all65") {
+      state.measure = "density";
+      document.querySelectorAll(".chip.measure-chip").forEach(c => {
+        c.classList.toggle("on", c.dataset.measure === "density");
+      });
+      document.getElementById("measure-note").textContent = "";
+      document.getElementById("scrub").min = YEAR_MIN;
+      state.to = clampToBand(state.to);
+      document.getElementById("to-year").value = state.to;
+      applyMode("snapshot");
+    } else {
+      state.from = clampToBand(state.from);
+      state.to   = clampToBand(state.to);
+      document.getElementById("from-year").value = state.from;
+      document.getElementById("to-year").value   = state.to;
+    }
+    updateYearOptions();
+    updatePresetAvailability();
+    updateBandModeUI();
+    render();
+  });
+});
+
+function updateBandModeUI() {
+  const bandActive = state.band !== "all65";
+  document.getElementById("u18-controls").style.display = bandActive ? "none" : "";
+  document.getElementById("band-controls").style.display = bandActive ? "" : "none";
+}
+
+function populateBandYears() {
+  const sel = document.getElementById("band-year");
+  const scrub = document.getElementById("band-scrub");
+  if (!sel || !scrub) return;
+  const years = [...BAND_YEARS_SET].sort((a, b) => a - b);
+  sel.innerHTML = "";
+  for (const y of years) {
+    sel.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+  }
+  sel.value = String(state.to);
+  scrub.min = years[0]; scrub.max = years[years.length - 1];
+  scrub.value = state.to;
+  sel.addEventListener("change", () => {
+    state.to = +sel.value;
+    scrub.value = state.to;
+    render();
+  });
+  // Scrub snaps to the nearest available band year.
+  scrub.addEventListener("input", () => {
+    const y = +scrub.value;
+    const snapped = clampToBand(y);
+    state.to = snapped;
+    sel.value = String(snapped);
+    render();
+  });
+}
+
+function updateYearOptions() {
+  const fy = document.getElementById("from-year");
+  const ty = document.getElementById("to-year");
+  const sy = document.getElementById("snap-year");
+  let avail = state.band === "all65" ? ANCHOR_YEARS : [...BAND_YEARS_SET].sort((a,b)=>a-b);
+  if (state.measure === "share") avail = avail.filter(y => y >= SHARE_YEAR_MIN);
+  for (const sel of [fy, ty, sy].filter(Boolean)) {
+    const cur = sel.value;
+    sel.innerHTML = "";
+    for (const y of avail) {
+      sel.insertAdjacentHTML("beforeend", `<option value="${y}">${y}</option>`);
+    }
+    const clamped = clampToBand(+cur);
+    const snapped = (state.measure === "share" && clamped < SHARE_YEAR_MIN) ? SHARE_YEAR_MIN : clamped;
+    sel.value = String(snapped);
+  }
+}
+
+function updatePresetAvailability() {
+  document.querySelectorAll(".chip[data-preset]").forEach(btn => {
+    const [f, t] = btn.dataset.preset.split(",").map(Number);
+    let ok = (state.band === "all65") || (BAND_YEARS_SET.has(f) && BAND_YEARS_SET.has(t));
+    if (ok && state.measure === "share") ok = (f >= SHARE_YEAR_MIN && t >= SHARE_YEAR_MIN);
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? "1" : "0.35";
+    btn.style.cursor = ok ? "pointer" : "not-allowed";
+  });
+}
+
+document.querySelectorAll(".chip.measure-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const m = btn.dataset.measure;
+    if (m === state.measure) return;
+    if (m === "share" && !TOTALS) return;  // data not loaded (shouldn't happen)
+    state.measure = m;
+    document.querySelectorAll(".chip.measure-chip").forEach(c => c.classList.toggle("on", c === btn));
+    // Share view only has 2000-2023 data. Snap year selection if needed.
+    if (m === "share") {
+      if (state.from < SHARE_YEAR_MIN) state.from = SHARE_YEAR_MIN;
+      if (state.to < SHARE_YEAR_MIN) state.to = SHARE_YEAR_MIN;
+      document.getElementById("from-year").value = state.from;
+      document.getElementById("to-year").value = state.to;
+      document.getElementById("scrub").min = SHARE_YEAR_MIN;
+      if (+document.getElementById("scrub").value < SHARE_YEAR_MIN) {
+        document.getElementById("scrub").value = SHARE_YEAR_MIN;
+      }
+      document.getElementById("measure-note").textContent = "";
+    } else {
+      document.getElementById("scrub").min = YEAR_MIN;
+      document.getElementById("measure-note").textContent = "";
+    }
+    updateYearOptions();
+    updatePresetAvailability();
+    render();
+  });
+});
+
+// ---------- tooltip system ----------
+// Single shared tooltip element. Any element with [data-tip="..."] gets one
+// on hover or focus. Tip content may be HTML.
+(function setupTooltips() {
+  const tip = document.createElement("div");
+  tip.className = "pop-tip";
+  document.body.appendChild(tip);
+  let pinned = null;
+  function show(target) {
+    const html = target.getAttribute("data-tip");
+    if (!html) return;
+    tip.innerHTML = html;
+    // Position: below target, horizontally clamped within viewport.
+    const r = target.getBoundingClientRect();
+    tip.style.left = "0px"; tip.style.top = "0px";
+    tip.classList.add("show");
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = window.scrollX + r.left + r.width / 2 - tw / 2;
+    let top  = window.scrollY + r.bottom + 8;
+    // Clamp horizontally
+    const minL = window.scrollX + 8;
+    const maxL = window.scrollX + document.documentElement.clientWidth - tw - 8;
+    if (left < minL) left = minL;
+    if (left > maxL) left = maxL;
+    // Flip above if it would go off the bottom
+    if (r.bottom + 8 + th > window.innerHeight - 4) {
+      top = window.scrollY + r.top - th - 8;
+    }
+    tip.style.left = left + "px";
+    tip.style.top  = top  + "px";
+  }
+  function hide() { tip.classList.remove("show"); }
+  document.addEventListener("mouseover", (e) => {
+    const t = e.target.closest("[data-tip]");
+    if (t) show(t);
+  });
+  document.addEventListener("mouseout", (e) => {
+    const t = e.target.closest("[data-tip]");
+    if (t && !t.contains(e.relatedTarget)) hide();
+  });
+  document.addEventListener("focusin", (e) => {
+    const t = e.target.closest && e.target.closest("[data-tip]");
+    if (t) show(t);
+  });
+  document.addEventListener("focusout", (e) => {
+    const t = e.target.closest && e.target.closest("[data-tip]");
+    if (t) hide();
+  });
+  // Hide on scroll (positioning would otherwise drift)
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+
+// Segmented mode toggle — sets visibility of mode-only rows + state.mode.
+function applyMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll(".chip.mode-chip").forEach(c => {
+    c.classList.toggle("on", c.dataset.mode === mode);
+  });
+  document.querySelectorAll(".mode-only-delta").forEach(el => {
+    el.style.display = mode === "delta" ? "" : "none";
+  });
+  document.querySelectorAll(".mode-only-snap").forEach(el => {
+    el.style.display = mode === "snapshot" ? "" : "none";
+  });
+  const help = document.getElementById("mode-help");
+  if (help) {
+    help.innerHTML = mode === "delta"
+      ? 'Map colors show <b style="color:var(--ink-soft);font-weight:600">change</b> between two years.'
+      : 'Map colors show the <b style="color:var(--ink-soft);font-weight:600">value</b> in a single year.';
+  }
+  if (mode === "delta") {
+    // Re-highlight the matching preset, if any.
+    clearPresetHighlight();
+    const match = document.querySelector(`.chip[data-preset="${state.from},${state.to}"]`);
+    if (match) match.classList.add("on");
+  } else {
+    clearPresetHighlight();
+    // Sync the snapshot year picker to current state.to
+    const sel = document.getElementById("snap-year");
+    if (sel) sel.value = String(state.to);
+    const sscrub = document.getElementById("snap-scrub");
+    if (sscrub) sscrub.value = state.to;
+  }
+}
+
+document.querySelectorAll(".chip.mode-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("on")) return;
+    applyMode(btn.dataset.mode);
+    render();
+  });
+});
+
+const scrub = document.getElementById("scrub");
+scrub.addEventListener("input", () => {
+  const y = +scrub.value;
+  state.to = y;
+  document.getElementById("to-year").value = ANCHOR_YEARS.includes(y) ? y : "";
+  clearPresetHighlight();
+  render();
+});
+
+// Snapshot-mode year select + scrub
+const snapYear = document.getElementById("snap-year");
+const snapScrub = document.getElementById("snap-scrub");
+if (snapYear) {
+  snapYear.addEventListener("change", () => {
+    state.to = +snapYear.value;
+    snapScrub.value = state.to;
+    render();
+  });
+}
+if (snapScrub) {
+  snapScrub.addEventListener("input", () => {
+    state.to = +snapScrub.value;
+    snapYear.value = ANCHOR_YEARS.includes(state.to) ? String(state.to) :
+      // for ACS years that are valid but maybe not in select, just clear:
+      (Array.from(snapYear.options).some(o => +o.value === state.to) ? String(state.to) : "");
+    render();
+  });
+}
+
+// ---------- boot ----------
+Promise.all([
+  fetch("tracts_base.geojson").then(r => r.json()),
+  fetch("seniors_density.json").then(r => r.json()),
+  fetch("seniors_counts.json").then(r => r.json()),
+  fetch("seniors_summary.json").then(r => r.json()),
+  fetch("neighborhoods.json").then(r => r.ok ? r.json() : {}).catch(() => ({})),
+  fetch("seniors_bands.json").then(r => r.ok ? r.json() : null).catch(() => null),
+  fetch("totals_timeseries.json").then(r => r.ok ? r.json() : null).catch(() => null),
+]).then(([base, ts, counts, summary, nbhd, bands, totals]) => {
+  BASE = base; TS = ts; COUNTS = counts; SUMMARY = summary; NBHD = nbhd || {};
+  AGEBANDS = bands; TOTALS = totals;
+  if (AGEBANDS) AGEBANDS.years.forEach(y => BAND_YEARS_SET.add(y));
+  BASE.features.forEach(f => {
+    AREA[f.properties.gisjoin]  = f.properties.land_sqmi;
+    GEOID[f.properties.gisjoin] = f.properties.geoid;
+  });
+  populateYears();
+  populateBandYears();
+  updateBandModeUI();
+  buildLayer();
+  buildStoryMarkers();
+  render();
+  // Update dek with real NYC-vs-suburbs split for senior gain 2000->2023.
+  const NYC_COUNTIES = new Set(["005", "047", "061", "081", "085"]);
+  let nyc00 = 0, nyc23 = 0, sub00 = 0, sub23 = 0;
+  const y2000 = COUNTS.years.indexOf(2000);
+  const y2023 = COUNTS.years.indexOf(2023);
+  for (const gj in COUNTS.tracts) {
+    const st = gj.slice(1, 3), county = gj.slice(4, 7);
+    const arr = COUNTS.tracts[gj];
+    const v0 = arr[y2000] || 0, v3 = arr[y2023] || 0;
+    if (st === "36" && NYC_COUNTIES.has(county)) {
+      nyc00 += v0; nyc23 += v3;
+    } else {
+      sub00 += v0; sub23 += v3;
+    }
+  }
+  const nycGain = nyc23 - nyc00, subGain = sub23 - sub00;
+  const total00 = nyc00 + sub00, total23 = nyc23 + sub23;
+  const totalGain = total23 - total00;
+  const totalPct = Math.round((totalGain / total00) * 100);
+  const nycPct = Math.round((nycGain / nyc00) * 100);
+  const subPct = Math.round((subGain / sub00) * 100);
+  const round10k = (n) => Math.round(n / 10000) * 10000;
+  const fmtMillions = (n) => (n / 1e6).toFixed(2) + " million";
+  document.getElementById("dek-2000").textContent = fmtMillions(total00);
+  document.getElementById("dek-2023").textContent = fmtMillions(total23);
+  document.getElementById("dek-gain").textContent = round10k(totalGain).toLocaleString();
+  document.getElementById("dek-gain-pct").textContent = "+" + totalPct + "%";
+  document.getElementById("dek-nyc").textContent = round10k(nycGain).toLocaleString();
+  document.getElementById("dek-sub").textContent = round10k(subGain).toLocaleString();
+  document.getElementById("dek-nyc-pct").textContent = "+" + nycPct + "%";
+  document.getElementById("dek-sub-pct").textContent = "+" + subPct + "%";
+});
+
+</script>
+</body>
+</html>
