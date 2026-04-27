@@ -111,7 +111,8 @@ def main():
 
     out_counts = {"years": years, "tracts": counts}
     out_density = {"years": years, "tracts": density}
-    out_bands = {"years": years, "bands": BANDS, "tracts": bands}
+    # Bands only emit measured years (no interpolation for age-band view)
+    out_bands = {"years": sorted(per_year.keys()), "bands": BANDS, "tracts": bands}
 
     (WEB / "seniors_counts.json").write_text(json.dumps(out_counts, separators=(",", ":")))
     (WEB / "seniors_density.json").write_text(json.dumps(out_density, separators=(",", ":")))
