@@ -24,6 +24,7 @@ docs/seniors_counts.json + docs/seniors_density.json + docs/seniors_bands.json.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 import requests
@@ -31,6 +32,10 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 DATA.mkdir(exist_ok=True)
+
+# Census API now requires a key; keyless calls 302-redirect and fail.
+# Free key: https://api.census.gov/data/key_signup.html
+KEY = os.environ.get("CENSUS_API_KEY", "")
 
 STATE_COUNTIES = {
     "36": ["005", "047", "061", "081", "085", "119", "059"],
@@ -67,6 +72,8 @@ def normalize_tract(t):
 
 def fetch_year(year, source):
     """source is 'decennial' or 'acs'."""
+    if not KEY:
+        raise SystemExit("Set CENSUS_API_KEY (free: https://api.census.gov/data/key_signup.html). Keyless Census API calls now fail.")
     if source == "decennial":
         if year == 2020:
             base = "https://api.census.gov/data/2020/dec/dhc"
@@ -88,6 +95,7 @@ def fetch_year(year, source):
                 "get": get,
                 "for": "tract:*",
                 "in": f"state:{state} county:{county}",
+                "key": KEY,
             }
             r = requests.get(base, params=params, timeout=60)
             if r.status_code != 200:
